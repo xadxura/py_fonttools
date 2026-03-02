@@ -726,6 +726,34 @@ class VoltToFea:
         ):
             raise NotImplementedError(type(sub))
 
+        def _key_length(key):
+            return len(key) if isinstance(key, (list, tuple)) else 1
+
+        # Preserve multi-position input sequences instead of collapsing them
+        # into a single marked class, which changes matching semantics.
+        if any(_key_length(key) > 1 for key in sub.mapping.keys()):
+            for key, val in sub.mapping.items():
+                if not key or not val:
+                    path, line, column = sub.location
+                    log.warning(f"{path}:{line}:{column}: Ignoring empty substitution")
+                    continue
+                key_items = key if isinstance(key, (list, tuple)) else [key]
+                key_items = [
+                    item if isinstance(item, (list, tuple)) else [item]
+                    for item in key_items
+                ]
+                glyphs = self._context(key_items)
+                if ignore:
+                    statement = ast.IgnoreSubstStatement([(prefix, glyphs, suffix)])
+                else:
+                    lookup_list = [None] * len(glyphs)
+                    lookup_list[0] = chained
+                    statement = ast.ChainContextSubstStatement(
+                        prefix, glyphs, suffix, lookup_list
+                    )
+                statements.append(statement)
+            return
+
         glyphs = []
         for key, val in sub.mapping.items():
             if not key or not val:
